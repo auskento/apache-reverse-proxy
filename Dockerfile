@@ -32,8 +32,10 @@ RUN mkdir -p /var/www/html/error-pages \
     && mkdir -p /var/www/letsencrypt \
     && mkdir -p /etc/apache2/sites-available
 
-# Copy custom HTML files
-COPY html/ /var/www/html/
+# Copy custom HTML files (including subdirectories)
+COPY html /var/www/html
+RUN chmod -R 755 /var/www/html && \
+    find /var/www/html -type f -exec chmod 644 {} \;
 
 # Copy Apache configuration
 COPY apache-conf/reverse-proxy.conf.template /etc/apache2/sites-available/reverse-proxy.conf.template
