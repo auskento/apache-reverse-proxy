@@ -2,6 +2,7 @@
 
 # Download and Resize App Icons from URLs
 # This script downloads icon images from provided URLs and resizes them to 100x100
+# If no custom URL is provided, uses default PNG files bundled with the container
 
 ICONS_DIR="/var/www/html/icons"
 TARGET_SIZE="100x100"
@@ -42,11 +43,6 @@ download_and_resize_icon() {
     local service_key=$1
     local icon_url=$2
     local service_name=$(echo "$service_key" | tr '[:lower:]' '[:upper:]')
-    
-    # Skip if URL is empty
-    if [ -z "$icon_url" ]; then
-        return 0
-    fi
     
     local service_path=$(service_to_path "$service_key")
     local temp_file="/tmp/${service_path}_icon"
@@ -103,16 +99,41 @@ download_and_resize_icon() {
 }
 
 # Process all services
-icon_count=0
-success_count=0
+custom_count=0
+default_count=0
+missing_count=0
 
 for service_key in "${!ICON_URLS[@]}"; do
     icon_url="${ICON_URLS[$service_key]}"
+    service_path=$(service_to_path "$service_key")
+    service_name=$(echo "$service_key" | tr '[:lower:]' '[:upper:]')
+    output_file="${ICONS_DIR}/${service_path}.png"
     
+    echo "Processing $service_name..."
+    
+    # Check if custom URL provided
     if [ -n "$icon_url" ]; then
-        ((icon_count++))
+        # Download custom icon
         if download_and_resize_icon "$service_key" "$icon_url"; then
-            ((success_count++))
+            ((custom_count++))
+        else
+            # Custom download failed, try to use default
+            if [ -f "$output_file" ]; then
+                echo "  ℹ️  Using default icon (custom download failed)"
+                ((default_count++))
+            else
+                echo "  (will use generated SVG)"
+                ((missing_count++))
+            fi
+        fi
+    else
+        # No custom URL provided, check for default bundled PNG
+        if [ -f "$output_file" ]; then
+            echo "  ✓ Using default icon"
+            ((default_count++))
+        else
+            echo "  (no custom URL, default icon not found - will use generated SVG)"
+            ((missing_count++))
         fi
     fi
 done
@@ -120,24 +141,13 @@ done
 echo ""
 
 # Report results
-if [ $icon_count -eq 0 ]; then
-    echo "ℹ️  No icon URLs provided"
-    echo "   Set ICON_URL_SERVICENAME environment variables to download icons"
-else
-    echo "✓ Icon Processing Complete"
-    echo "  Downloaded: $success_count / $icon_count"
-    
-    if [ $success_count -eq $icon_count ]; then
-        echo "  Status: All icons downloaded successfully! ✓"
-    elif [ $success_count -gt 0 ]; then
-        echo "  Status: Some icons downloaded (partial success)"
-    else
-        echo "  Status: Failed to download any icons"
-    fi
-fi
+echo "✓ Icon Processing Complete"
+echo "  Custom (downloaded): $custom_count"
+echo "  Default (bundled): $default_count"
+echo "  Using generated SVG: $missing_count"
 
 echo ""
 echo "Icon directory contents:"
-ls -lh "$ICONS_DIR"/*.png 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}' || echo "  (no icons yet)"
+ls -lh "$ICONS_DIR"/*.png 2>/dev/null | awk '{print "  " $9 " (" $5 ")"}' || echo "  (no PNG icons)"
 
 echo ""
